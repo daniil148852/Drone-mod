@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "dronemod",
+  "version": "${version}",
+  "name": "Drone Mod",
+  "description": "Controllable drone with tablet GUI for Minecraft",
+  "authors": ["DroneMod"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/dronemod/textures/item/drone_item.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.dronemod.DroneMod"],
+    "client": ["com.dronemod.DroneModClient"]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

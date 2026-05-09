@@ -1,0 +1,17 @@
+{
+  "item.dronemod.drone_item": "Дрон",
+  "item.dronemod.tablet_item": "Планшет управления",
+  "entity.dronemod.drone": "Дрон",
+  "itemGroup.dronemod.main": "Мод Дрон",
+  "gui.dronemod.tablet_title": "Управление дроном",
+  "gui.dronemod.distance": "Дистанция",
+  "gui.dronemod.altitude": "Высота",
+  "gui.dronemod.no_signal": "НЕТ СИГНАЛА",
+  "gui.dronemod.connected": "ПОДКЛЮЧЕН",
+  "gui.dronemod.up": "ВВЕРХ",
+  "gui.dronemod.down": "ВНИЗ",
+  "tooltip.dronemod.drone_item": "Поставьте чтобы разместить дрон",
+  "tooltip.dronemod.tablet_item": "ПКМ чтобы привязать к дрону",
+  "tooltip.dronemod.tablet_linked": "Привязан к дрону на %s",
+  "tooltip.dronemod.tablet_not_linked": "Не привязан - нажмите ПКМ на дрон"
+}

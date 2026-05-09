@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GGG",
+    "GEG",
+    "GRG"
+  ],
+  "key": {
+    "G": {"item": "minecraft:glass_pane"},
+    "E": {"item": "minecraft:ender_pearl"},
+    "R": {"item": "minecraft:redstone"}
+  },
+  "result": {
+    "item": "dronemod:tablet_item",
+    "count": 1
+  }
+}

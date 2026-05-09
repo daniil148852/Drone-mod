@@ -1,0 +1,17 @@
+{
+  "item.dronemod.drone_item": "Drone",
+  "item.dronemod.tablet_item": "Control Tablet",
+  "entity.dronemod.drone": "Drone",
+  "itemGroup.dronemod.main": "Drone Mod",
+  "gui.dronemod.tablet_title": "Drone Controller",
+  "gui.dronemod.distance": "Distance",
+  "gui.dronemod.altitude": "Altitude",
+  "gui.dronemod.no_signal": "NO SIGNAL",
+  "gui.dronemod.connected": "CONNECTED",
+  "gui.dronemod.up": "UP",
+  "gui.dronemod.down": "DOWN",
+  "tooltip.dronemod.drone_item": "Place to deploy drone",
+  "tooltip.dronemod.tablet_item": "Right-click to link to drone, then open GUI",
+  "tooltip.dronemod.tablet_linked": "Linked to drone at %s",
+  "tooltip.dronemod.tablet_not_linked": "Not linked - right-click a drone"
+}

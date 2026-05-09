@@ -1,0 +1,326 @@
+name: Build Drone Mod
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ created ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Шаг 1: Генерация ассетов (звуки + текстуры)
+  # ─────────────────────────────────────────────
+  generate-assets:
+    name: Generate Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-assets-${{ hashFiles('generate_assets.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-assets-
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy scipy soundfile Pillow
+
+      - name: Generate sounds and textures
+        run: python generate_assets.py
+
+      - name: Verify generated assets
+        run: |
+          echo "=== Generated sound files ==="
+          ls -lh src/main/resources/assets/dronemod/sounds/
+          file src/main/resources/assets/dronemod/sounds/*.ogg
+
+          echo ""
+          echo "=== Generated texture files ==="
+          find src/main/resources/assets/dronemod/textures -name "*.png" -exec ls -lh {} \;
+          find src/main/resources/assets/dronemod/textures -name "*.png" -exec file {} \;
+
+          echo ""
+          echo "=== Checking all required assets ==="
+          for f in \
+            src/main/resources/assets/dronemod/sounds/drone_idle.ogg \
+            src/main/resources/assets/dronemod/sounds/drone_fly.ogg \
+            src/main/resources/assets/dronemod/sounds/drone_crash.ogg \
+            src/main/resources/assets/dronemod/textures/item/drone_item.png \
+            src/main/resources/assets/dronemod/textures/item/tablet_item.png \
+            src/main/resources/assets/dronemod/textures/entity/drone_entity.png \
+            src/main/resources/assets/dronemod/textures/gui/tablet_gui.png; do
+            if [ -f "$f" ]; then
+              echo "✓ $f"
+            else
+              echo "✗ MISSING: $f"
+              exit 1
+            fi
+          done
+
+      - name: Upload generated assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-assets
+          path: |
+            src/main/resources/assets/dronemod/sounds/
+            src/main/resources/assets/dronemod/textures/
+          retention-days: 1
+
+  # ─────────────────────────────────────────────
+  # Шаг 2: Сборка мода
+  # ─────────────────────────────────────────────
+  build:
+    name: Build Mod
+    needs: generate-assets
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        java: [17]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download generated assets
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-assets
+          path: src/main/resources/assets/dronemod/
+
+      - name: Verify assets in place
+        run: |
+          echo "=== Assets after download ==="
+          find src/main/resources/assets/dronemod -type f | sort
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build --no-daemon --stacktrace
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify build output
+        run: |
+          echo "=== Build artifacts ==="
+          ls -lh build/libs/
+          echo ""
+          echo "=== JAR contents (resource files) ==="
+          jar tf build/libs/drone-mod-*.jar | grep -E '\.(ogg|png|json)$' | head -30
+
+      - name: Upload mod JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: drone-mod-${{ github.sha }}
+          path: |
+            build/libs/drone-mod-*.jar
+            !build/libs/*-sources.jar
+            !build/libs/*-dev.jar
+          retention-days: 30
+
+      - name: Upload sources JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: drone-mod-sources-${{ github.sha }}
+          path: build/libs/*-sources.jar
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # Шаг 3: Тесты (проверка структуры мода)
+  # ─────────────────────────────────────────────
+  validate:
+    name: Validate Mod Structure
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download mod JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: drone-mod-${{ github.sha }}
+          path: ./artifacts/
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Validate JAR structure
+        run: |
+          JAR_FILE=$(find ./artifacts -name "drone-mod-*.jar" ! -name "*-sources*" ! -name "*-dev*" | head -1)
+          echo "Validating: $JAR_FILE"
+          echo ""
+
+          # Извлекаем список файлов
+          jar tf "$JAR_FILE" > jar_contents.txt
+
+          echo "=== Full JAR contents ==="
+          cat jar_contents.txt
+          echo ""
+
+          # Проверяем обязательные файлы
+          REQUIRED_FILES=(
+            "fabric.mod.json"
+            "assets/dronemod/sounds.json"
+            "assets/dronemod/lang/en_us.json"
+            "assets/dronemod/lang/ru_ru.json"
+            "assets/dronemod/sounds/drone_idle.ogg"
+            "assets/dronemod/sounds/drone_fly.ogg"
+            "assets/dronemod/sounds/drone_crash.ogg"
+            "assets/dronemod/textures/item/drone_item.png"
+            "assets/dronemod/textures/item/tablet_item.png"
+            "assets/dronemod/textures/entity/drone_entity.png"
+            "assets/dronemod/textures/gui/tablet_gui.png"
+            "assets/dronemod/models/item/drone_item.json"
+            "assets/dronemod/models/item/tablet_item.json"
+            "assets/dronemod/models/entity/drone_model.json"
+            "data/dronemod/recipes/drone_item.json"
+            "data/dronemod/recipes/tablet_item.json"
+            "com/dronemod/DroneMod.class"
+            "com/dronemod/DroneModClient.class"
+            "com/dronemod/entity/DroneEntity.class"
+            "com/dronemod/item/DroneItem.class"
+            "com/dronemod/item/TabletItem.class"
+            "com/dronemod/client/gui/TabletScreen.class"
+            "com/dronemod/client/model/DroneEntityModel.class"
+            "com/dronemod/client/renderer/DroneEntityRenderer.class"
+            "com/dronemod/network/ModNetworking.class"
+            "com/dronemod/registry/ModItems.class"
+            "com/dronemod/registry/ModEntities.class"
+            "com/dronemod/registry/ModSounds.class"
+          )
+
+          PASS=0
+          FAIL=0
+          for f in "${REQUIRED_FILES[@]}"; do
+            if grep -q "$f" jar_contents.txt; then
+              echo "✓ $f"
+              PASS=$((PASS + 1))
+            else
+              echo "✗ MISSING: $f"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+
+          echo ""
+          echo "=== Results: $PASS passed, $FAIL failed ==="
+
+          if [ $FAIL -gt 0 ]; then
+            echo "::error::$FAIL required files missing from JAR!"
+            exit 1
+          fi
+
+          echo "::notice::All $PASS required files present in JAR ✓"
+
+      - name: Validate fabric.mod.json
+        run: |
+          JAR_FILE=$(find ./artifacts -name "drone-mod-*.jar" ! -name "*-sources*" ! -name "*-dev*" | head -1)
+          
+          # Извлекаем и проверяем fabric.mod.json
+          jar xf "$JAR_FILE" fabric.mod.json
+          
+          echo "=== fabric.mod.json ==="
+          cat fabric.mod.json
+          echo ""
+          
+          # Проверяем JSON валидность через python
+          python3 -c "
+          import json, sys
+          with open('fabric.mod.json') as f:
+              data = json.load(f)
+          
+          assert data['id'] == 'dronemod', f'Wrong mod id: {data[\"id\"]}'
+          assert 'main' in data['entrypoints'], 'Missing main entrypoint'
+          assert 'client' in data['entrypoints'], 'Missing client entrypoint'
+          assert 'com.dronemod.DroneMod' in data['entrypoints']['main'], 'Wrong main class'
+          assert 'com.dronemod.DroneModClient' in data['entrypoints']['client'], 'Wrong client class'
+          assert '~1.20.1' in data['depends'].get('minecraft', ''), 'Wrong minecraft version'
+          
+          print('fabric.mod.json validation passed ✓')
+          "
+
+  # ─────────────────────────────────────────────
+  # Шаг 4: Публикация релиза
+  # ─────────────────────────────────────────────
+  release:
+    name: Publish Release
+    needs: [build, validate]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Download mod JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: drone-mod-${{ github.sha }}
+          path: ./artifacts/
+
+      - name: Get JAR file info
+        id: jar_info
+        run: |
+          JAR_FILE=$(find ./artifacts -name "drone-mod-*.jar" ! -name "*-sources*" ! -name "*-dev*" | head -1)
+          JAR_NAME=$(basename "$JAR_FILE")
+          JAR_SIZE=$(du -h "$JAR_FILE" | cut -f1)
+          echo "jar_path=$JAR_FILE" >> $GITHUB_OUTPUT
+          echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
+          echo "jar_size=$JAR_SIZE" >> $GITHUB_OUTPUT
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.jar_info.outputs.jar_path }}
+          body: |
+            ## 🚁 Drone Mod for Minecraft Fabric 1.20.1
+
+            ### Features:
+            - 🎮 Controllable drone entity with physics & inertia
+            - 📱 Tablet GUI with WASD controls, compass, altitude & distance indicators
+            - 📦 9-slot drone inventory
+            - 🔊 Custom generated sounds (idle, fly, crash)
+            - 🎨 Custom 3D model with animated propellers
+            - ✈️ Auto-landing on signal loss (>64 blocks)
+            - 💥 Crash on hard landing (>10 blocks fall)
+            - 🔧 Crafting recipes for drone & tablet
+
+            ### Installation:
+            1. Install [Fabric Loader](https://fabricmc.net/) for Minecraft 1.20.1
+            2. Install [Fabric API](https://modrinth.com/mod/fabric-api)
+            3. Place `${{ steps.jar_info.outputs.jar_name }}` into `.minecraft/mods/`
+
+            **File size:** ${{ steps.jar_info.outputs.jar_size }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

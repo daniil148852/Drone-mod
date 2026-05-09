@@ -1,0 +1,32 @@
+{
+  "drone_idle": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "dronemod:drone_idle",
+        "stream": false,
+        "volume": 0.5
+      }
+    ]
+  },
+  "drone_fly": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "dronemod:drone_fly",
+        "stream": false,
+        "volume": 0.7
+      }
+    ]
+  },
+  "drone_crash": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "dronemod:drone_crash",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  }
+}
